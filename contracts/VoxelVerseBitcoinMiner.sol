@@ -6,13 +6,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./libraries/Base64.sol";
 import "./interfaces/IDistributionPool.sol";
 import "./interfaces/IWindmill.sol";
 import "./interfaces/IClaim.sol";
 import "./interfaces/IStone.sol";
 import "./interfaces/IWood.sol";
+import "./interfaces/IReferrer.sol";
+import "./interfaces/IPickaxe.sol";
 
 import "hardhat/console.sol";
 
@@ -21,16 +22,15 @@ import "hardhat/console.sol";
 
 contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     using Counters for Counters.Counter;
-    using SafeMath for uint256;
 
     // event handling
     event TokensMinted(address indexed owner, uint256 amount);
     event MinerStarted(string minerType, address indexed user, uint256 tokenId);
     event RewardClaimed(address indexed user, uint256 tokenId);
 
-    mapping (address => address) public referrals;
+    mapping (address => address) public bitcoinMinerReferrals;
     mapping (address => uint) public claimTokensRewarded;
-    mapping (address => uint) public minerMints;
+    mapping (address => uint) public minerMinted;
 
     bool public btcPaused;
 
@@ -65,9 +65,12 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     address public dp; // distribution pool
     address public wm; // windmill contract
     address public cm; // claim token contract
+    address public rf; // referral tracking contract
+    address public px; // pickaxe contract
 
     // Emission rates, can be modified by owner or controller
     uint256 public btcReward;
+    uint256 public bonusReward;
 
     // Miner Data
     struct Miner {
@@ -141,7 +144,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
                 Strings.toString(_tokenId),
                 '", "description": "Mine more blocks with your Crypto Miner", "image": "',
                 imageURI, // Use the dynamically generated imageURI
-                '", "attributes": [ { "trait_type": "Hashrate", "value": ',strHashrate,'}]}'
+                '", "attributes": [ { "trait_type": "Hashrate", "value": ',strHashrate,', ',minerToken.hashMeasured,'}]}'
             )
         );
 
@@ -169,26 +172,30 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         // Now you can use 'userWindmill.tokenId' to retrieve information about the user's windmill.
         IWindmill.Windmill memory windmill = IWindmill(wm).getWindmill(userWindmill.tokenId);
 
-        // Check if referrer address is valid
-      if (referrer != address(0)) {
-        require(referrer != msg.sender, "Cannot refer yourself");
-        require(minerMints[referrer] > 0, "Referrer has not minted a miner");
-        
-      }
+       // Check if referrer address is valid
+        if (referrer != address(0)) {
+            require(referrer != msg.sender, "Cannot refer yourself");
+
+            // Retrieve the referrer's minerMints using the interface function
+            uint256 referrerMints = IReferrer(rf).getMinerMints(referrer);
+
+            require(referrerMints > 0, "Referrer has not minted a miner");
+        }
+
 
         TokenInfo storage tokens = AllowedCrypto[_pid];
         IERC20 paytoken;
         paytoken = tokens.paytoken;
         uint256 amount = 1;
-        uint256 price = btcMinerPrice;
+        uint256 price = discountedPrice;
             require(!btcPaused, "Bitcoin miner minting is paused"); // Check if Bitcoin minting is paused
-            require(bitcoin.minersHashing.add(amount) <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
-            require(windmill.currentPowerUsed.add(minerPower.mul(107)) <= windmill.windmillCap, "You must increase your windmill capacity");
+            require(bitcoin.minersHashing + (amount) <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
+            require(windmill.currentPowerUsed + (minerPower * 107) <= windmill.windmillCap, "You must increase your windmill capacity");
             require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
-            paytoken.transferFrom(msg.sender, address(this), price.mul(amount));
+            paytoken.transferFrom(msg.sender, address(this), price * (amount));
             
 
-            uint256 minerToken = _btcMinerTokenIds.current().add(1);
+            uint256 minerToken = _btcMinerTokenIds.current() + (1);
             miners[minerToken] = Miner({
                 
                 tokenId: minerToken,
@@ -196,30 +203,31 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
                 name: "JohnnyNewcome", // Miner name
                 hashrate: initialHashrate, // Replace this with the appropriate hashrate
                 hashMeasured: "TH", // Measured in TerraHashes
-                powerConsumption: minerPower.mul(107), // Replace this with the appropriate power consumption
-                rewardPerBlock: initialHashrate.mul(btcReward), // Calculate the rewardPerBlock based on hashrate and btcReward
+                powerConsumption: minerPower * 107, // Replace this with the appropriate power consumption
+                rewardPerBlock: initialHashrate * btcReward, // Calculate the rewardPerBlock based on hashrate and btcReward
                 lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
                 accumulated: 0,
-                dailyEstimate: initialHashrate.mul(btcReward).mul(dailyBlocks),
+                dailyEstimate: initialHashrate * btcReward * dailyBlocks,
                 imageURI: _imageURI
                 });
                 safeMintBtcMiner(msg.sender);
 
-                bitcoin.minersHashing = bitcoin.minersHashing.add(amount);
+                bitcoin.minersHashing = bitcoin.minersHashing + amount;
                 bitcoin.minerTokenIds.push(minerToken);
-                bitcoin.totalHashrate = bitcoin.totalHashrate.add(initialHashrate.mul(amount));
-                bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption.add(minerPower.mul(107));
+                bitcoin.totalHashrate = bitcoin.totalHashrate + (initialHashrate * amount);
+                bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption + (minerPower * 107);
                 bitcoinMinerSupply ++;
 
                 // Update the windmill's current power consumption
                 if (windmill.currentPowerUsed == 0) {
-                    windmill.currentPowerUsed = (minerPower.mul(107));
+                    windmill.currentPowerUsed = minerPower * 107;
                 } else {
-                    windmill.currentPowerUsed = windmill.currentPowerUsed.add(minerPower.mul(107));
+                    windmill.currentPowerUsed = windmill.currentPowerUsed + minerPower * 107;
                 }
-
-                minerMints[msg.sender]++;
-                referrals[referrer] = msg.sender; // add the msg sender address to referrer's referrals
+                address user = msg.sender;
+                IReferrer(rf).addMinerMints(user);
+                IReferrer(rf).addReferrers(referrer);
+                bitcoinMinerReferrals[referrer] = msg.sender; // add the msg sender address to referrer's bitcoin miner referrals
                 claimTokensRewarded[referrer]++; // reward the referrer with 1 claim point for the successful referral
                 IClaim(cm).mint(referrer); // reward the referrer with 1 claim token for the successful referral            
     }
@@ -240,13 +248,13 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         uint256 amount = 1;
         uint256 price = btcMinerPrice;
             require(!btcPaused, "Bitcoin miner minting is paused"); // Check if Bitcoin minting is paused
-            require(bitcoin.minersHashing.add(amount) <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
-            require(windmill.currentPowerUsed.add(minerPower.mul(107)) <= windmill.windmillCap, "You must increase your windmill capacity");
+            require(bitcoin.minersHashing + amount <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
+            require(windmill.currentPowerUsed + (minerPower * 107) <= windmill.windmillCap, "You must increase your windmill capacity");
             require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
-            paytoken.transferFrom(msg.sender, address(this), price.mul(amount));
+            paytoken.transferFrom(msg.sender, address(this), price * amount);
             
         // Set the new token struct data
-            uint256 minerToken = _btcMinerTokenIds.current().add(1);
+            uint256 minerToken = _btcMinerTokenIds.current() + (1);
             miners[minerToken] = Miner({
                 
                 tokenId: minerToken,
@@ -254,23 +262,30 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
                 name: "JohnnyNewcome", // Miner name
                 hashrate: initialHashrate, // Replace this with the appropriate hashrate
                 hashMeasured: "TH", // Measured in TerraHashes
-                powerConsumption: minerPower.mul(107), // Replace this with the appropriate power consumption
-                rewardPerBlock: initialHashrate.mul(btcReward), // Calculate the rewardPerBlock based on hashrate and btcReward
+                powerConsumption: minerPower * 107, // Replace this with the appropriate power consumption
+                rewardPerBlock: initialHashrate * btcReward, // Calculate the rewardPerBlock based on hashrate and btcReward
                 lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
                 accumulated: 0,
-                dailyEstimate: initialHashrate.mul(btcReward).mul(dailyBlocks),
+                dailyEstimate: initialHashrate * btcReward * dailyBlocks,
                 imageURI: _imageURI
                 });
                 safeMintBtcMiner(msg.sender);
 
                 // Update global Bitcoin miner stats
-                bitcoin.minersHashing = bitcoin.minersHashing.add(amount);
+                bitcoin.minersHashing = bitcoin.minersHashing + amount;
                 bitcoin.minerTokenIds.push(minerToken);
-                bitcoin.totalHashrate = bitcoin.totalHashrate.add(initialHashrate.mul(amount));
-                bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption.add(minerPower.mul(107));
+                bitcoin.totalHashrate = bitcoin.totalHashrate + (initialHashrate * amount);
+                bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption + (minerPower * 107);
                 bitcoinMinerSupply ++;
 
-                minerMints[msg.sender]++;
+                // Update the windmill's current power consumption
+                if (windmill.currentPowerUsed == 0) {
+                    windmill.currentPowerUsed = minerPower * 10;
+                } else {
+                    windmill.currentPowerUsed = windmill.currentPowerUsed + (minerPower * 10);
+                }
+
+                minerMinted[msg.sender]++;
         
     }
 
@@ -301,16 +316,16 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         Miner storage miner = miners[tokenId];
         
         // Update the token stats based on the boosted miner's parameters
-            require(windmill.currentPowerUsed.add(21) < windmill.windmillCap, "Windmill capacity has been reached, please increase capacity");
-            miner.accumulated = (block.number.sub(miner.lastUpdateBlock).mul(btcReward)).mul(miner.hashrate).add(miner.accumulated);
-            miner.hashrate = miner.hashrate.add(hsh);
-            miner.powerConsumption = miner.powerConsumption.add(minerPower.mul(21));
-            miner.rewardPerBlock = miner.hashrate.mul(btcReward);
+            require(windmill.currentPowerUsed + 21 < windmill.windmillCap, "Windmill capacity has been reached, please increase capacity");
+            miner.accumulated = (block.number - miner.lastUpdateBlock * btcReward) * (miner.hashrate) + (miner.accumulated);
+            miner.hashrate = miner.hashrate + (hsh);
+            miner.powerConsumption = miner.powerConsumption + (minerPower * 21);
+            miner.rewardPerBlock = miner.hashrate * (btcReward);
             miner.lastUpdateBlock = block.number;
-            miner.dailyEstimate = miner.rewardPerBlock.mul(dailyBlocks);
-            bitcoin.totalHashrate = bitcoin.totalHashrate.add(1);
-            bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption.add(minerPower.mul(21));
-            windmill.currentPowerUsed = windmill.currentPowerUsed.add(minerPower.mul(21));
+            miner.dailyEstimate = miner.rewardPerBlock * (dailyBlocks);
+            bitcoin.totalHashrate = bitcoin.totalHashrate + 1;
+            bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption + (minerPower * 21);
+            windmill.currentPowerUsed = windmill.currentPowerUsed + (minerPower * 21);
     }
 
     // Update the name of a miner
@@ -357,7 +372,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         miner.lastUpdateBlock = block.number;
 
         // Adjust the total rewards paid according to miner
-            bitcoin.totalRewardsPaid = bitcoin.totalRewardsPaid.add(rewards);
+            bitcoin.totalRewardsPaid = bitcoin.totalRewardsPaid + (rewards);
 
         // Emit an event or perform other actions as needed
         emit RewardClaimed(user, tokenId);
@@ -368,10 +383,10 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         Miner storage miner = miners[tokenId];
 
         uint256 currentBlockNumber = block.number;
-        uint256 blocksSinceLastUpdate = currentBlockNumber.sub(miner.lastUpdateBlock);
+        uint256 blocksSinceLastUpdate = currentBlockNumber - (miner.lastUpdateBlock);
 
         // Determine which miners reward is being retrieved
-            uint256 rewards = blocksSinceLastUpdate.mul(btcReward).mul(miner.hashrate).add(miner.accumulated).div(10**10);
+            uint256 rewards = blocksSinceLastUpdate * (btcReward) * (miner.hashrate) + (miner.accumulated) / (10**10);
             return rewards;
     }
 
@@ -379,7 +394,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     // Safemint
 
     function safeMintBtcMiner(address to) internal {
-        uint256 tokenId = _btcMinerTokenIds.current().add(1);
+        uint256 tokenId = _btcMinerTokenIds.current() + (1);
         _btcMinerTokenIds.increment();
         minerHolders[msg.sender] = tokenId;
         _safeMint(to, tokenId);
@@ -423,6 +438,10 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         cm = _cm;
     }
 
+    function initializePx(address _px) public onlyOwner {
+        px = _px;
+    }
+
     // Pause minting or boosting if necessary
     function toggleBtcPaused() public onlyOwner {
         btcPaused = !btcPaused;
@@ -447,7 +466,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     
 
     function setBtcEmissionRate(uint256 _minedRewards) public onlyOwner {
-        uint256 rewardsPerTH = _minedRewards.div(truBhsh); // Convert to the token's precision
+        uint256 rewardsPerTH = _minedRewards / (truBhsh); // Convert to the token's precision
 
         
 
@@ -457,13 +476,13 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
             uint256 tokenId = totalBtcMinerTokenIds[i];
             Miner storage miner = miners[tokenId];
             // log accumulated rewards before updating global hashrate
-            miner.accumulated = (block.number.sub(miner.lastUpdateBlock).mul(btcReward)).mul(miner.hashrate).add(miner.accumulated);
+            miner.accumulated = (block.number - (miner.lastUpdateBlock) * (btcReward)) * (miner.hashrate) + (miner.accumulated);
             miner.lastUpdateBlock = block.number;
             // Set the new global reward per block
-            btcReward = rewardsPerTH.div(dailyBlocks);
+            btcReward = rewardsPerTH / (dailyBlocks);
             // Calculate the rewardPerBlock with the token's precision
-            miner.rewardPerBlock = btcReward.mul(miner.hashrate);
-            miner.dailyEstimate = miner.rewardPerBlock.mul(dailyBlocks);
+            miner.rewardPerBlock = btcReward * (miner.hashrate);
+            miner.dailyEstimate = miner.rewardPerBlock * (dailyBlocks);
 
         }
     }
@@ -484,7 +503,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         burnAmount = _amount;
     }
 
-    // Withdraw PROSPECT tokens
+    // Withdraw ERC20 tokens
     function withdraw(uint256 _pid) public payable onlyOwner() {
             TokenInfo storage tokens = AllowedCrypto[_pid];
             IERC20 paytoken;
