@@ -6,12 +6,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Receiver.sol";
 
 
 contract VoxelVerseWood is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155Supply {
     event Burned(address indexed player, uint256 amount);
     uint256 public constant wood = 1;
+
+    // mapping to store allowed contracts
+    mapping(address => bool) public allowedContracts;
 
     constructor()
         ERC1155("https://ipfs.io/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/{id}.json")
@@ -29,17 +31,30 @@ contract VoxelVerseWood is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155S
         _unpause();
     }
 
-    function mint(uint256 amount)
+    function mintOwner(uint256 amount)
         public onlyOwner
     {
         _mint(msg.sender, 1, amount, "");
     }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
+    function mintBatchOwner(address to, uint256[] memory ids, uint256[] memory amounts)
         public
         onlyOwner
     {
+        _mintBatch(to, ids, amounts, "");
+    }
 
+    function mint(uint256 amount)
+        external
+    {
+         require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
+        _mint(msg.sender, 1, amount, "");
+    }
+
+    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
+        external
+    {
+         require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
         _mintBatch(to, ids, amounts, "");
     }
 
