@@ -6,7 +6,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./libraries/Base64.sol";
 import "./interfaces/IStone.sol";
 import "./interfaces/IWood.sol";
@@ -15,7 +14,6 @@ import "hardhat/console.sol";
 
 contract VoxelVerseWindmill is ERC721, Ownable {
     using Counters for Counters.Counter;
-    using SafeMath for uint256;
 
     // event handling
     event TokensMinted(address indexed owner, uint256 amount);
@@ -169,7 +167,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         IWood(wood).burnWood(user, _requiredMaterial1);
         IStone(stone).burnStone(user, _requiredMaterial2);
         // Create a new windmill with the specified _cap
-        uint256 generatorToken = _windmillTokenIds.current().add(16200);
+        uint256 generatorToken = _windmillTokenIds.current() + 9999;
 
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
@@ -220,7 +218,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         IStone(stone).burnStone(user, _requiredMaterial2);
 
         // Create a new windmill with the specified _cap
-        uint256 generatorToken = _windmillTokenIds.current().add(14000);
+        uint256 generatorToken = _windmillTokenIds.current() + 9999;
 
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
@@ -246,11 +244,11 @@ contract VoxelVerseWindmill is ERC721, Ownable {
 
         // Deduct the boost cost from the sender's balance
         require(paytoken.balanceOf(msg.sender) >= windCapIncreaseRate, "Insufficient funds");
-        paytoken.transferFrom(msg.sender, address(this), windCapIncreaseRate.mul(amount));
+        paytoken.transferFrom(msg.sender, address(this), windCapIncreaseRate * amount);
         // Get the windmill details
         Windmill storage windmill = windmills[tokenId];
         // Update the windmills capacity
-       windmill.windmillCap = windmill.windmillCap.add(amount);  
+       windmill.windmillCap = windmill.windmillCap + amount;  
     }
 
      // Function to retrieve a Windmill struct by tokenId
@@ -262,7 +260,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
     // Safemint
 
     function safeMintWindmill(address to) internal {
-        uint256 tokenId = _windmillTokenIds.current().add(14000);
+        uint256 tokenId = _windmillTokenIds.current() + 9999;
         _windmillTokenIds.increment();
         windmillHolders[msg.sender] = tokenId;
         _safeMint(to, tokenId);
@@ -271,11 +269,11 @@ contract VoxelVerseWindmill is ERC721, Ownable {
     // onlyOwner functions
 
     function airdropWindmillCap(uint256 tokenId, uint256 amount) public onlyOwner{
-        require(tokenId >= 16200 && tokenId < 32200, "invalid token Id");
+        require(tokenId >= 10000 && tokenId < 20000, "invalid token Id");
         // Get the windmill details
         Windmill storage windmill = windmills[tokenId];
         // Update the windmills capacity
-       windmill.windmillCap = windmill.windmillCap.add(amount);  
+       windmill.windmillCap = windmill.windmillCap + amount;  
     }
 
     function addCurrency(
