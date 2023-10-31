@@ -8,7 +8,7 @@ import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import "./libraries/Base64.sol";
 import "./interfaces/IProspectPowerBank.sol";
-
+import "./interfaces/IDistributionPool.sol";
 import "hardhat/console.sol";
 
 
@@ -25,6 +25,8 @@ contract Pickaxes is ERC721, Ownable {
 
     // Prospect Power Bank Contract
     address public pb;
+    // Distribution Pool
+    address public dp;
 
     // Pickaxe supply control
     uint256 public pickaxeSupply = 10000;
@@ -136,22 +138,20 @@ contract Pickaxes is ERC721, Ownable {
         uint256 pwrValue = currentBalance + (depositAmount);
         // Update the pickaxe power based on the boosted pickaxe's parameters
             if (pwrValue < lvl1Threshold) {
-                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr5);
+                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr1);
             } else if (pwrValue > lvl1Threshold && pwrValue < lvl2Threshold) {
-                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr4);
+                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr2);
             } else if (pwrValue > lvl2Threshold && pwrValue < lvl3Threshold) {
                 pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr3);
-            } else if (pwrValue > lvl3Threshold && pwrValue < lvl4Threshold) {
-                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr2);
-            } else if (pwrValue > lvl4Threshold) {
-                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr1);
+            } else if (pwrValue > lvl3Threshold) {
+                pickaxe.pickaxePower = pickaxe.pickaxePower + (pwr4);
             }
             // Update the rarity if necessary
-            if (pickaxe.pickaxePower > unCommon) {
+            if (pickaxe.pickaxePower > unCommon && pickaxe.pickaxePower < rare) {
                 pickaxe.pickaxeRarity = "UnCommon";
-            } else if (pickaxe.pickaxePower > rare) {
+            } else if (pickaxe.pickaxePower > rare && pickaxe.pickaxePower < epic) {
                 pickaxe.pickaxeRarity = "Rare";
-            } else if (pickaxe.pickaxePower > epic) {
+            } else if (pickaxe.pickaxePower > epic && pickaxe.pickaxePower < legendary) {
                 pickaxe.pickaxeRarity = "Epic";
             } else if (pickaxe.pickaxePower > legendary) {
                 pickaxe.pickaxeRarity = "Legendary";
@@ -168,9 +168,41 @@ contract Pickaxes is ERC721, Ownable {
         _safeMint(to, tokenId);
     }
 
-    function getPickaxeRarity(uint256 tokenId) external view returns (string memory){
+    function getPickaxeRarity(uint256 tokenId) public view returns (string memory){
         // Get the pickaxe details
         Pickaxe storage pickaxe = pickaxes[tokenId];
         return pickaxe.pickaxeRarity;
     }
+
+    function claimRewards(uint256 tokenId, uint256 amount) public {
+        require(_exists(tokenId), "Invalid tokenId");
+        uint256 _pid = 0; // prospect token
+        address user = msg.sender;
+        require(pickaxeHolders[user] == tokenId, "Not the owner of the token");
+
+        Pickaxe storage pickaxe = pickaxes[tokenId];
+
+        // Calculate the multiplier to apply based off the Pickaxe Rarity
+        uint256 multiplier;
+        if (keccak256(abi.encodePacked(pickaxe.pickaxeRarity)) == keccak256(abi.encodePacked("Common"))) {
+            multiplier = 1;
+        } else if (keccak256(abi.encodePacked(pickaxe.pickaxeRarity)) == keccak256(abi.encodePacked("UnCommon"))) {
+            multiplier = 2;
+        } else if (keccak256(abi.encodePacked(pickaxe.pickaxeRarity)) == keccak256(abi.encodePacked("Rare"))) {
+            multiplier = 3;
+        } else if (keccak256(abi.encodePacked(pickaxe.pickaxeRarity)) == keccak256(abi.encodePacked("Epic"))) {
+            multiplier = 4;
+        } else if (keccak256(abi.encodePacked(pickaxe.pickaxeRarity)) == keccak256(abi.encodePacked("Legendary"))) {
+            multiplier = 5;
+        }
+
+        amount = amount * multiplier;
+
+        // Call the appropriate claim function in the DistributionPool contract based on minerType
+        IDistributionPool(dp).claim(user, _pid, amount);
+
+        // Emit an event or perform other actions as needed
+        emit RewardClaimed(user, tokenId);
+    }
+
 }
