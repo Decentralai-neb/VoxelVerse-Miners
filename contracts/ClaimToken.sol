@@ -11,7 +11,7 @@ contract ClaimToken is ERC20, ERC20Burnable, Ownable {
     constructor()
         ERC20("ClaimToken", "CLAIM")
     {
-        _mint(msg.sender, 200 * 10 ** decimals());
+        
     }
 
     function setMinterContract(address _minterContract) external onlyOwner {
@@ -24,7 +24,7 @@ contract ClaimToken is ERC20, ERC20Burnable, Ownable {
     }
 
     function mint(address user) external onlyContract {
-        uint256 amount = 1;
+        uint256 amount = 1 ether;
         require(totalSupply() + amount <= maxSupply, "Total supply exceeds the maximum limit");
         _mint(user, amount);
     }

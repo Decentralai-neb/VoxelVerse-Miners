@@ -205,7 +205,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     
 
 
-    function mintNoReferral(uint256 _pid, string memory _imageURI, uint256 windmillToken) public {
+    function mintNoReferral(uint256 _pid, uint256 windmillToken) public {
         address user = msg.sender;
 
         // Check if the caller owns a windmill
@@ -236,6 +236,8 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
 
         // Set the new token struct data
         uint256 minerToken = _btcMinerTokenIds.current() + 1;
+
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
         miners[minerToken] = Miner({
             tokenId: minerToken,
             token: "Bitcoin", // Replace this with the appropriate token name
@@ -247,7 +249,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
             lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
             accumulated: 0,
             dailyEstimate: initialHashrate * btcReward * dailyBlocks,
-            imageURI: _imageURI
+            imageURI: string(abi.encodePacked(baseImageURI, Strings.toString(minerToken), ".png"))
         });
 
         safeMintBtcMiner(user);
@@ -290,7 +292,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
 
         // Check if the user has enough capacity before boosting
-        require(currentPower + (minerPower * 107) <= cap, "You must increase your windmill capacity");
+        require(currentPower + (minerPower * 21) <= cap, "You must increase your windmill capacity");
 
         uint256 price = btcBoostRate;
         require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");

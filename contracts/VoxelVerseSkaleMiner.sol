@@ -205,7 +205,7 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
     }
 
 
-    function mintNoReferral(uint256 _pid, string memory _imageURI, uint256 windmillToken) public {
+    function mintNoReferral(uint256 _pid, uint256 windmillToken) public {
         address user = msg.sender;
         // Check if the caller owns a windmill
         IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
@@ -235,6 +235,8 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
 
             // Set the new token struct data
             uint256 minerToken = _sklMinerTokenIds.current() + 2000;
+
+            string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
             miners[minerToken] = Miner({
                 tokenId: minerToken,
                 token: "Skale", // Replace this with the appropriate token name
@@ -246,7 +248,7 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
                 lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
                 accumulated: 0,
                 dailyEstimate: initialHashrate * sklReward * dailyBlocks,
-                imageURI: _imageURI
+                imageURI: string(abi.encodePacked(baseImageURI, Strings.toString(minerToken), ".png"))
             });
 
             safeMintSklMiner(msg.sender);
@@ -287,7 +289,7 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
         uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
 
         // Check if the user has enough capacity before boosting
-        require(currentPower + (minerPower * 107) <= cap, "You must increase your windmill capacity");
+        require(currentPower + (minerPower * 5) <= cap, "You must increase your windmill capacity");
 
         uint256 price = sklBoostRate;
         require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
@@ -304,7 +306,7 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
         miner.lastUpdateBlock = block.number;
         miner.dailyEstimate = miner.rewardPerBlock * dailyBlocks;
 
-            uint256 newPower = minerPower * 21;
+            uint256 newPower = minerPower * 5;
             uint256 totalPower = currentPower + newPower;
             // Update the windmill's current power used and windmill cap
             IWindmill(wm).updateWindmillCurrentPower(windmillToken, totalPower, true);

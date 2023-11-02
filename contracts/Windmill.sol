@@ -91,34 +91,6 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         }
     }
 
-    function tokensOfOwner(address owner) external view returns (uint256[] memory) {
-        uint256 balance = balanceOf(owner);
-        uint256[] memory tokens = new uint256[](balance);
-
-        for (uint256 i = 0; i < balance; i++) {
-            tokens[i] = tokenOfOwnerByIndex(owner, i);
-        }
-
-        return tokens;
-    }
-
-    function tokenOfOwnerByIndex(address owner, uint256 index) public view returns (uint256) {
-        require(index < balanceOf(owner), "Owner has no token at this index");
-
-        for (uint256 i = 0; i < _windmillTokenIds.current(); i++) {
-            uint256 tokenId = i + 10000;
-            if (ownerOf(tokenId) == owner) {
-                if (index == 0) {
-                    return tokenId;
-                }
-                index--;
-            }
-        }
-        revert("Token not found");
-    }
-
-
-
      function tokenURI(uint256 _tokenId) public view virtual override returns (string memory) {
         require(_exists(_tokenId), "ERC721Metadata: URI query for nonexistent token");
 
@@ -149,7 +121,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
 
 
 
-    function mintWindmill(uint256 _cap, uint256 _pid, string memory _imageURI) public {
+    function mintWindmill(uint256 _cap, uint256 _pid) public {
         require(windmillsMintedByAddress[msg.sender] == 0, "Caller already owns a Windmill");
         require(_cap == 500 || _cap == 150 || _cap == 100 || _cap == 50, "Invalid _cap value");
         TokenInfo storage tokens = AllowedCrypto[_pid];
@@ -186,12 +158,12 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         IStone(stone).burnStone(user, _requiredMaterial2);
         // Create a new windmill with the specified _cap
         uint256 generatorToken = _windmillTokenIds.current() + 10000;
-
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
             currentPowerUsed: 0,
             windmillCap: _cap,
-            imageURI:_imageURI
+            imageURI:string(abi.encodePacked(baseImageURI, Strings.toString(generatorToken), ".png"))
         });
         // Mint the Windmill token with the correct token ID
         safeMintWindmill(msg.sender);
@@ -203,7 +175,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         windmillHolders[msg.sender] = generatorToken;
     }
 
-    function claimWindmill(uint256 _cap, uint256 _pid, string memory _imageURI) public {
+    function claimWindmill(uint256 _cap, uint256 _pid) public {
         require(windmillsMintedByAddress[msg.sender] == 0, "Caller already owns a Windmill");
         TokenInfo storage tokens = AllowedCrypto[_pid];
         IERC20 paytoken;
@@ -241,11 +213,12 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         // Create a new windmill with the specified _cap
         uint256 generatorToken = _windmillTokenIds.current() + 10000;
 
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
             currentPowerUsed: 0,
             windmillCap: _cap,
-            imageURI: _imageURI
+            imageURI: string(abi.encodePacked(baseImageURI, Strings.toString(generatorToken), ".png"))
         });
         // Mint the Windmill token with the correct token ID
         safeMintWindmill(msg.sender);

@@ -32,7 +32,7 @@ contract VoxelVerseStone is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155
     }
 
     function mintOwner(uint256 amount)
-        public onlyOwner
+        public
     {
         _mint(msg.sender, 2, amount, "");
     }

@@ -1,11 +1,11 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 
 describe('VoxelVerseMiners', function () {
   let prospect, voxelversestone, voxelversewood, claimtoken, distributionpool, prospectpowerbank, referrers, voxelversewindmill, pickaxes, voxelversebitcoinminer, voxelverseskaleminer, owner;
 
   before(async () => {
-    [owner] = await ethers.getSigners();
+    [owner, addr1] = await ethers.getSigners();
     const Prospect = await ethers.getContractFactory('Prospect');
     prospect = await Prospect.deploy();
     console.log("Prospect contract deployed to:", prospect.address);
@@ -50,9 +50,9 @@ describe('VoxelVerseMiners', function () {
     voxelverseskaleminer = await VoxelVerseSkaleMiner.deploy();
     console.log("Skale Miner contract deployed to:", voxelverseskaleminer.address);
 
-    const emissionRate = ethers.utils.parseUnits("0.1", "ether"); // 0.1 ether in wei
     const boostRate = ethers.utils.parseUnits("0.02", "ether");  // 0.02 ether in wei
     const minerPrice = ethers.utils.parseUnits("200", "ether");  // 200 ether in wei
+    const minerDiscountPrice = ethers.utils.parseUnits("190", "ether");  // 190 ether in wei
     const burnAmount = ethers.utils.parseUnits("2", "ether");    // 2 ether in wei
     const approvalAmount = ethers.utils.parseUnits("50000", "ether"); // 50000 ether in wei
     const capRate = ethers.utils.parseUnits("0.7", "ether"); // 0.7 ether in wei
@@ -75,9 +75,9 @@ describe('VoxelVerseMiners', function () {
     await voxelversebitcoinminer.setRate(1,1);
     await voxelversebitcoinminer.setTruBhsh(140);
     await voxelversebitcoinminer.setDailyBlocks(17000);
-    await voxelversebitcoinminer.setBtcEmissionRate(emissionRate);
     await voxelversebitcoinminer.setBtcBoostRate(boostRate);
     await voxelversebitcoinminer.setBTCMinerPrice(minerPrice);
+    await voxelversebitcoinminer.setBTCMinerDiscountedPrice(minerDiscountPrice);
     await voxelversebitcoinminer.setBurnAmount(burnAmount);
     await voxelverseskaleminer.initializeDp(distributionpool.address);
     await voxelverseskaleminer.initializeWm(voxelversewindmill.address);
@@ -87,9 +87,9 @@ describe('VoxelVerseMiners', function () {
     await voxelverseskaleminer.setRate(1,1);
     await voxelverseskaleminer.setTruSklhsh(100);
     await voxelverseskaleminer.setDailyBlocks(17000);
-    await voxelverseskaleminer.setSklEmissionRate(emissionRate);
     await voxelverseskaleminer.setSklBoostRate(boostRate);
     await voxelverseskaleminer.setSKLMinerPrice(minerPrice);
+    await voxelverseskaleminer.setSKLMinerDiscountedPrice(minerDiscountPrice);
     await voxelverseskaleminer.setBurnAmount(burnAmount);
     await distributionpool.allowContract(voxelversebitcoinminer.address);
     await distributionpool.allowContract(voxelverseskaleminer.address);
@@ -119,8 +119,37 @@ describe('VoxelVerseMiners', function () {
     await voxelversewindmill.initializeSt(voxelversestone.address);
     await voxelversewood.setApprovalForAll(voxelversewindmill.address, bool);
     await voxelversestone.setApprovalForAll(voxelversewindmill.address, bool);
+    // secondary account
+    await prospect.connect(addr1).approve(voxelversebitcoinminer.address, approvalAmount);
+    await prospect.connect(addr1).approve(voxelverseskaleminer.address, approvalAmount);
+    await prospect.connect(addr1).approve(voxelversewindmill.address, approvalAmount);
+    await prospect.connect(addr1).approve(pickaxes.address, approvalAmount);
+    await prospect.connect(addr1).approve(prospectpowerbank.address, approvalAmount);
 
 
+  });
+
+  async function advanceBlocks(numBlocks) {
+    for (let i = 0; i < numBlocks; i++) {
+      await network.provider.send('evm_mine');
+    }
+  }
+
+  it('Should return set Bitcoin Mining Data', async function () {
+    const dailyBlocksData = await voxelversebitcoinminer.dailyBlocks();
+    console.log(dailyBlocksData);
+    const truBhshData = await voxelversebitcoinminer.truBhsh();
+    console.log(truBhshData);
+    const boostRateData = await voxelversebitcoinminer.btcBoostRate();
+    console.log(boostRateData);
+    const btcMinerPriceData = await voxelversebitcoinminer.btcMinerPrice();
+    console.log(btcMinerPriceData); 
+    const burnAmountData = await voxelversebitcoinminer.burnAmount();
+    console.log(burnAmountData);
+    const discountedPriceData = await voxelversebitcoinminer.discountedPrice();
+    console.log(discountedPriceData);
+  
+    expect(dailyBlocksData.toString()).to.equal('17000');
   });
 
   it('Should return the Prospect balance of the owner', async function () {
@@ -177,11 +206,10 @@ describe('VoxelVerseMiners', function () {
   it('Should mint 1 Windmill', async function () {
     const _cap = 150; // Example cap value
     const _pid = 0;   // Example pid value
-    const _imageURI = "https://your-image-uri.com/image.png"; // Example image URI
 
-    await voxelversewindmill.mintWindmill(_cap, _pid, _imageURI);
+    await voxelversewindmill.mintWindmill(_cap, _pid);
 
-    console.log("Windmill minted with image URI:", _imageURI);
+    console.log("Windmill minted with cap:", _cap);
 
   });
 
@@ -216,35 +244,192 @@ describe('VoxelVerseMiners', function () {
 
   it('Should mint 1 Bitcoin Miner', async function () {
     const _pid = 0;   // Example pid value
-    const _imageURI = "https://your-image-uri.com/image.png"; // Example image URI
     const _token = 10000;
     const ownerBalanceBefore = await voxelversebitcoinminer.balanceOf(owner.address);
     const windmillDataBefore = await voxelversewindmill.windmills(_token);
     console.log(ownerBalanceBefore);
     console.log(windmillDataBefore);
-    await voxelversebitcoinminer.mintNoReferral(_pid, _imageURI, _token);
+    await voxelversebitcoinminer.mintNoReferral(_pid, _token);
     const ownerBalanceAfter = await voxelversebitcoinminer.balanceOf(owner.address);
     const windmillDataAfter = await voxelversewindmill.windmills(_token);
     console.log(ownerBalanceAfter);
     console.log(windmillDataAfter);
     expect(ownerBalanceAfter).to.equal(ownerBalanceBefore.add(1));
   });
+
+  it('Should initialize bitcoin mining', async function () {
+    const emissionRate = ethers.utils.parseUnits("0.1", "ether"); // 0.1 ether in wei
+    await voxelversebitcoinminer.setBtcEmissionRate(emissionRate);
+    const btcRewardData = await voxelversebitcoinminer.btcReward();
+    console.log(btcRewardData); 
+  })
  
   it('Should mint 1 Skale Miner', async function () {
     const _pid = 0;   // Example pid value
-    const _imageURI = "https://your-image-uri.com/image.png"; // Example image URI
     const _token = 10000;
     const ownerBalanceBefore = await voxelverseskaleminer.balanceOf(owner.address);
     const windmillDataBefore = await voxelversewindmill.windmills(_token);
     console.log(ownerBalanceBefore);
     console.log(windmillDataBefore);
-    await voxelverseskaleminer.mintNoReferral(_pid, _imageURI, _token);
+    await voxelverseskaleminer.mintNoReferral(_pid, _token);
     const ownerBalanceAfter = await voxelverseskaleminer.balanceOf(owner.address);
     const windmillDataAfter = await voxelversewindmill.windmills(_token);
     console.log(ownerBalanceAfter);
     console.log(windmillDataAfter);
     expect(ownerBalanceAfter).to.equal(ownerBalanceBefore.add(1));
   });
+
+  it('Should initialize skale mining', async function () {
+    const skaleEmissionRate = ethers.utils.parseUnits("1000", "ether"); // 0.1 ether in wei
+    await voxelverseskaleminer.setSklEmissionRate(skaleEmissionRate);
+    const sklRewardData = await voxelverseskaleminer.sklReward();
+    console.log(sklRewardData); 
+  })
+
+  it('Should transfer PROSPECT from owner to user', async function () {
+    const _amount = ethers.utils.parseUnits("10000", "ether"); // 10000 tokens in wei
+    const ownerBalanceBefore = await prospect.balanceOf(owner.address);
+    const addr1BalanceBefore = await prospect.balanceOf(addr1.address);
+
+    console.log("Owner balance before:", ownerBalanceBefore.toString());
+    console.log("User balance before:", addr1BalanceBefore.toString());
+
+    await prospect.connect(owner).transfer(addr1.address, _amount);
+
+    const ownerBalanceAfter = await prospect.balanceOf(owner.address);
+    const addr1BalanceAfter = await prospect.balanceOf(addr1.address);
+
+    console.log("Owner balance after:", ownerBalanceAfter.toString());
+    console.log("User balance after:", addr1BalanceAfter.toString());
+
+    expect(addr1BalanceAfter).to.equal(addr1BalanceBefore.add(_amount));
+    expect(ownerBalanceAfter).to.equal(ownerBalanceBefore.sub(_amount));
+  });
+
+
+  it('Should mint 1 Pickaxe for user', async function () {
+    const userBalanceBefore = await pickaxes.balanceOf(addr1.address);
+    console.log(userBalanceBefore);
+    await pickaxes.connect(addr1).mintPickaxe();
+    const userBalanceAfter = await pickaxes.balanceOf(addr1.address);
+    console.log(userBalanceAfter);
+    expect(userBalanceAfter).to.equal(userBalanceBefore.add(1));
+  });
+
+  it('Should mint 500 wood to user', async function () {
+    const mintAmount = 500;
+    const userBalanceBefore = await voxelversewood.balanceOf(addr1.address, 1);
+    console.log(userBalanceBefore);
+    await voxelversewood.connect(addr1).mintOwner(mintAmount);
+    const userBalanceAfter = await voxelversewood.balanceOf(addr1.address, 1);
+    console.log(userBalanceAfter);
+    expect(userBalanceAfter).to.equal(userBalanceBefore.add(500));
+  });
+
+
+
+  it('Should mint 500 stone to user', async function () {
+    const mintAmount = 500;
+    const userBalanceBefore = await voxelversestone.balanceOf(addr1.address, 2);
+    console.log(userBalanceBefore);
+    await voxelversestone.connect(addr1).mintOwner(mintAmount);
+    const userBalanceAfter = await voxelversestone.balanceOf(addr1.address, 2);
+    console.log(userBalanceAfter);
+    expect(userBalanceAfter).to.equal(userBalanceBefore.add(500));
+  });
+
+  it('Should mint 1 Windmill for user', async function () {
+    const _cap = 150; // Example cap value
+    const _pid = 0;   // Example pid value
+
+    await voxelversewindmill.connect(addr1).mintWindmill(_cap, _pid);
+
+    console.log("Windmill minted with cap:", _cap);
+
+  });
+
+  it('Should mint 1 Bitcoin Miner for new user using owner as referrer', async function () {
+    const referrerAddress = owner.address;
+    const _pid = 0;
+    const _token = 10001;
+    const userBalanceBefore = await voxelversebitcoinminer.balanceOf(addr1.address);
+    const userWindmillDataBefore = await voxelversewindmill.windmills(_token);
+    const ownerClaimBalanceBefore = await claimtoken.balanceOf(owner.address);
+    console.log(userBalanceBefore);
+    console.log(userWindmillDataBefore);
+    console.log(ownerClaimBalanceBefore);
+    await referrers.connect(addr1).mintBmWithReferral(_pid, referrerAddress, _token);
+    const userBalanceAfter = await voxelversebitcoinminer.balanceOf(addr1.address);
+    const userWindmillDataAfter = await voxelversewindmill.windmills(_token);
+    const ownerClaimBalanceAfter = await claimtoken.balanceOf(owner.address);
+    console.log(userBalanceAfter);
+    console.log(userWindmillDataAfter);
+    console.log(ownerClaimBalanceAfter);
+  })
+
+  it('Should return miner data for owner bitcoin miner', async function () {
+    // Advance 10 blocks
+    await advanceBlocks(16500);
+    const _token = 1;
+    const minerData = await voxelversebitcoinminer.miners(_token);
+    console.log(minerData);
+  })
+
+  it('Should get pending rewards for owner bitcoin miner', async function () {
+    const _token = 1;
+    const pendingRewards = await voxelversebitcoinminer.getPendingRewards(_token);
+    console.log(pendingRewards);
+  })
+
+  it('Should claim rewards for owner bitcoin miner', async function () {
+    const _token = 1;
+    const prospectBalanceBefore = await prospect.balanceOf(owner.address);
+    console.log(prospectBalanceBefore);
+    await voxelversebitcoinminer.claimRewards(_token);
+    const prospectBalanceAfter = await prospect.balanceOf(owner.address);
+    console.log(prospectBalanceAfter);
+  })
+
+  it('Should boost Bitcoin Miner hashrate 1 times for owner', async function () {
+    const _token = 1;
+    const _windToken = 10000;
+    const _pid = 0;
+    const minerDataBefore = await voxelversebitcoinminer.miners(_token);
+    const windmillDataBefore = await voxelversewindmill.windmills(_windToken);
+    console.log(minerDataBefore);
+    console.log(windmillDataBefore);
+    await voxelversebitcoinminer.boostMinerHash(_token, _pid, _windToken);
+    const minerDataAfter = await voxelversebitcoinminer.miners(_token);
+    const windmillDataAfter = await voxelversewindmill.windmills(_windToken);
+    console.log(minerDataAfter);
+    console.log(windmillDataAfter);
+  });
+
+  it('Should boost Bitcoin Miner hashrate 5 times for owner', async function () {
+    const _token = 1;
+    const _windToken = 10000;
+    const _pid = 0;
+    const numBoosts = 5;
+
+    const minerDataBefore = await voxelversebitcoinminer.miners(_token);
+    const windmillDataBefore = await voxelversewindmill.windmills(_windToken);
+    console.log(minerDataBefore);
+    console.log(windmillDataBefore);
+
+    for (let i = 0; i < numBoosts; i++) {
+        await voxelversebitcoinminer.boostMinerHash(_token, _pid, _windToken);
+    }
+
+    const minerDataAfter = await voxelversebitcoinminer.miners(_token);
+    const windmillDataAfter = await voxelversewindmill.windmills(_windToken);
+    console.log(minerDataAfter);
+    console.log(windmillDataAfter);
+  });
+
+  it('Should return total referrals for owner address', async function () {
+    const amountOfReferrals = await referrers.totalReferrals(owner.address);
+    console.log(amountOfReferrals);
+  })
 
 
 });
