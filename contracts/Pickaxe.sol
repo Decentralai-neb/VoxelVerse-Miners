@@ -108,7 +108,7 @@ contract Pickaxes is ERC721, Ownable {
 
     // Mint a pickaxe
     function mintPickaxe() public {
-            uint256 pickaxeToken = _pickaxeTokenIds.current() + (1);
+            uint256 pickaxeToken = _pickaxeTokenIds.current() + 1;
 
             string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
            
@@ -162,7 +162,7 @@ contract Pickaxes is ERC721, Ownable {
     // Safemint
 
     function safeMintPickaxe(address to) internal {
-        uint256 tokenId = _pickaxeTokenIds.current() + (1);
+        uint256 tokenId = _pickaxeTokenIds.current() + 1;
         _pickaxeTokenIds.increment();
         pickaxeHolders[msg.sender] = tokenId;
         _safeMint(to, tokenId);
@@ -174,7 +174,7 @@ contract Pickaxes is ERC721, Ownable {
         return pickaxe.pickaxeRarity;
     }
 
-    function claimRewards(uint256 tokenId, uint256 amount) public {
+    function claimRewards(uint256 tokenId, uint256 amount) external {
         require(_exists(tokenId), "Invalid tokenId");
         uint256 _pid = 0; // prospect token
         address user = msg.sender;

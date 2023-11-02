@@ -9,10 +9,8 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import "./libraries/Base64.sol";
 import "./interfaces/IDistributionPool.sol";
 import "./interfaces/IWindmill.sol";
-import "./interfaces/IClaim.sol";
 import "./interfaces/IStone.sol";
 import "./interfaces/IWood.sol";
-import "./interfaces/IReferrer.sol";
 
 import "hardhat/console.sol";
 
@@ -63,8 +61,6 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
     mapping(uint256 => uint) public rates;
     address public dp; // distribution pool
     address public wm; // windmill contract
-    address public cm; // claim token contract
-    address public rf; // referrer tracking contract
 
     // Emission rates, can be modified by owner or controller
     uint256 public sklReward;
@@ -99,15 +95,6 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
     SkaleStats public skale;
 
     constructor() ERC721("VoxelVerseSkaleMiner", "VMSKL") {
-        // Set the template URI for all miners
-        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
-
-        // Initialize miners and their imageURIs
-        for (uint256 tokenId = 1; tokenId <= skaleMinerSupply; tokenId++) {
-            string memory imageURI = string(abi.encodePacked(baseImageURI, Strings.toString(tokenId), ".png"));
-        
-            miners[tokenId].imageURI = imageURI;
-        }
     }
 
     function checkIfUserHasMiner() public view returns (Miner memory) {
@@ -159,101 +146,96 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
         _;
     }
 
-    function mintWithReferral(uint256 _pid, address referrer, string memory _imageURI) public {
-        // Check if the caller owns a windmill
-        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill();
+    function mintWithReferral(address user, uint256 _pid, uint256 windmillToken) external {
+         // Check if the caller owns a windmill
+        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
+        uint256 windmillTokenId = userWindmill.tokenId; // Store the windmill tokenId
 
-        // Check if the user has a valid windmill based on the returned struct.
-        require(userWindmill.tokenId > 0, "Caller must own at least one windmill to mint a miner");
+        // Check if the user has at least one windmill
+        require(windmillTokenId > 0, "Caller must own at least one windmill to mint a miner");
 
-        // Now you can use 'userWindmill.tokenId' to retrieve information about the user's windmill.
-        IWindmill.Windmill memory windmill = IWindmill(wm).getWindmill(userWindmill.tokenId);
+        // Get the current power used and windmill cap
+        uint256 currentPower = IWindmill(wm).getCurrentPowerUsed(windmillToken);
+        uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
 
-        // Check if referrer address is valid
-        if (referrer != address(0)) {
-            require(referrer != msg.sender, "Cannot refer yourself");
-
-            // Retrieve the referrer's minerMints using the interface function
-            uint256 referrerMints = IReferrer(rf).getMinerMints(referrer);
-
-            require(referrerMints > 0, "Referrer has not minted a miner");
-        }
+        // Check if the user has enough capacity before minting
+        require(currentPower + (minerPower * 10) <= cap, "You must increase your windmill capacity");
 
         TokenInfo storage tokens = AllowedCrypto[_pid];
         IERC20 paytoken;
         paytoken = tokens.paytoken;
         uint256 amount = 1;
         uint256 price = discountedPrice;
-            require(!sklPaused, "Skale miner minting is paused"); // Check if Skale minting is paused
-            require(skale.minersHashing + (amount) <= skaleMinerSupply, "Skale miner supply exceeded");
-            require(windmill.currentPowerUsed + (minerPower * 10) <= windmill.windmillCap, "You must increase your windmill capacity");
-            require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
-            paytoken.transferFrom(msg.sender, address(this), price * amount);
-            
+        require(!sklPaused, "Skale miner minting is paused");
+        require(skale.minersHashing + (amount) <= skaleMinerSupply, "Skale miner supply exceeded");
 
-            uint256 minerToken = _sklMinerTokenIds.current() + 1999;
-            miners[minerToken] = Miner({
-                
-                tokenId: minerToken,
-                token: "Skale", // Replace this with the appropriate token name
-                name: "JohnnyNewcome", // Miner name
-                hashrate: initialHashrate, // Replace this with the appropriate hashrate
-                hashMeasured: "VH", // Measured in TerraHashes
-                powerConsumption: minerPower * 10, // Replace this with the appropriate power consumption
-                rewardPerBlock: initialHashrate * sklReward, // Calculate the rewardPerBlock based on hashrate and sklReward
-                lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
-                accumulated: 0,
-                dailyEstimate: initialHashrate * sklReward * dailyBlocks,
-                imageURI: _imageURI
-                });
-                safeMintSklMiner(msg.sender);
+        // Transfer the payment
+        require(paytoken.balanceOf(user) >= price, "Insufficient funds");
+        paytoken.transferFrom(user, address(this), price * amount);
 
-                skale.minersHashing = skale.minersHashing + (amount);
-                skale.minerTokenIds.push(minerToken);
-                skale.totalHashrate = skale.totalHashrate + (initialHashrate * amount);
-                skale.totalPowerConsumption = skale.totalPowerConsumption + (minerPower * 10);
-                skaleMinerSupply ++;
+        uint256 minerToken = _sklMinerTokenIds.current() + 1;
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
+        miners[minerToken] = Miner({
+            tokenId: minerToken,
+            token: "Skale", // Replace this with the appropriate token name
+            name: "JohnnyNewcome", // Miner name
+            hashrate: initialHashrate, // Replace this with the appropriate hashrate
+            hashMeasured: "TH", // Measured in TerraHashes
+            powerConsumption: minerPower * 10, // Replace this with the appropriate power consumption
+            rewardPerBlock: initialHashrate * sklReward, // Calculate the rewardPerBlock based on hashrate and btcReward
+            lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
+            accumulated: 0,
+            dailyEstimate: initialHashrate * sklReward * dailyBlocks,
+            imageURI: string(abi.encodePacked(baseImageURI, Strings.toString(minerToken), ".png"))
+        });
 
-                // Update the windmill's current power consumption
-                if (windmill.currentPowerUsed == 0) {
-                    windmill.currentPowerUsed = minerPower * 10;
-                } else {
-                    windmill.currentPowerUsed = windmill.currentPowerUsed + (minerPower * 10);
-                }
+        safeMintSklMiner(user);
 
-                address user = msg.sender;
-                IReferrer(rf).addMinerMints(user);
-                IReferrer(rf).addReferrers(referrer);
-                skaleMinerReferrals[referrer] = msg.sender; // add the msg sender address to referrer's skale miner referrals
-                claimTokensRewarded[referrer]++; // reward the referrer with 1 claim point for the successful referral
-                IClaim(cm).mint(referrer); // reward the referrer with 1 claim token for the successful referral            
+        skale.minersHashing = skale.minersHashing + amount;
+        skale.minerTokenIds.push(minerToken);
+        skale.totalHashrate = skale.totalHashrate + (initialHashrate * amount);
+        skale.totalPowerConsumption = skale.totalPowerConsumption + (minerPower * 10);
+        skaleMinerSupply++;
+
+            uint256 newPower = minerPower * 10;
+            uint256 totalPower = currentPower + newPower;
+            // Update the windmill's current power used and windmill cap
+            IWindmill(wm).updateWindmillCurrentPower(windmillToken, totalPower, true);
+            minerMints[msg.sender]++;
     }
 
-    function mintNoReferral(uint256 _pid, string memory _imageURI) public {
+
+    function mintNoReferral(uint256 _pid, string memory _imageURI, uint256 windmillToken) public {
+        address user = msg.sender;
         // Check if the caller owns a windmill
-        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill();
+        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
+        uint256 windmillTokenId = userWindmill.tokenId; // Store the windmill tokenId
 
-        // Check if the user has a valid windmill based on the returned struct.
-        require(userWindmill.tokenId > 0, "Caller must own at least one windmill to mint a miner");
+        // Check if the user has at least one windmill
+        require(windmillTokenId > 0, "Caller must own at least one windmill to mint a miner");
 
-        // Now you can use 'userWindmill.tokenId' to retrieve information about the user's windmill.
-        IWindmill.Windmill memory windmill = IWindmill(wm).getWindmill(userWindmill.tokenId);
-        // ERC20 paytoken logic
-        TokenInfo storage tokens = AllowedCrypto[_pid];
-        IERC20 paytoken;
-        paytoken = tokens.paytoken;
-        uint256 amount = 1;
-        uint256 price = sklMinerPrice;
-            require(!sklPaused, "Skale miner minting is paused"); // Check if Skale minting is paused
-            require(skale.minersHashing + amount <= skaleMinerSupply, "Skale miner supply exceeded");
-            require(windmill.currentPowerUsed + (minerPower * 10) <= windmill.windmillCap, "You must increase your windmill capacity");
+        // Get the current power used and windmill cap
+        uint256 currentPower = IWindmill(wm).getCurrentPowerUsed(windmillToken);
+        uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
+
+        // Check if the user has enough capacity before minting
+        require(currentPower + (minerPower * 10) <= cap, "You must increase your windmill capacity");
+
+            // ERC20 paytoken logic
+            TokenInfo storage tokens = AllowedCrypto[_pid];
+            IERC20 paytoken;
+            paytoken = tokens.paytoken;
+            uint256 amount = 1;
+            uint256 price = sklMinerPrice;
+            require(!sklPaused, "Bitcoin miner minting is paused");
+            require(skale.minersHashing + amount <= skaleMinerSupply, "Bitcoin miner supply exceeded");
+            // Transfer payment
             require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
             paytoken.transferFrom(msg.sender, address(this), price * amount);
-            
-        // Set the new token struct data
-            uint256 minerToken = _sklMinerTokenIds.current() + 1999;
+
+            // Set the new token struct data
+            uint256 minerToken = _sklMinerTokenIds.current() + 2000;
             miners[minerToken] = Miner({
-                
                 tokenId: minerToken,
                 token: "Skale", // Replace this with the appropriate token name
                 name: "JohnnyNewcome", // Miner name
@@ -265,65 +247,70 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
                 accumulated: 0,
                 dailyEstimate: initialHashrate * sklReward * dailyBlocks,
                 imageURI: _imageURI
-                });
-                safeMintSklMiner(msg.sender);
+            });
 
-                // Update global Bitcoin miner stats
-                skale.minersHashing = skale.minersHashing + amount;
-                skale.minerTokenIds.push(minerToken);
-                skale.totalHashrate = skale.totalHashrate + (initialHashrate * amount);
-                skale.totalPowerConsumption = skale.totalPowerConsumption + (minerPower * 10);
-                skaleMinerSupply ++;
+            safeMintSklMiner(msg.sender);
 
-                // Update the windmill's current power consumption
-                if (windmill.currentPowerUsed == 0) {
-                    windmill.currentPowerUsed = (minerPower * 10);
-                } else {
-                    windmill.currentPowerUsed = windmill.currentPowerUsed + (minerPower * 10);
-                }
+            // Update global Bitcoin miner stats
+            skale.minersHashing = skale.minersHashing + amount;
+            skale.minerTokenIds.push(minerToken);
+            skale.totalHashrate = skale.totalHashrate + (initialHashrate * amount);
+            skale.totalPowerConsumption = skale.totalPowerConsumption + (minerPower * 10);
+            skaleMinerSupply++;
+            
+            uint256 newPower = minerPower * 10;
+            uint256 totalPower = currentPower + newPower;
+            // Update the windmill's current power used and windmill cap
+            IWindmill(wm).updateWindmillCurrentPower(windmillToken, totalPower, true);
 
-                minerMints[msg.sender]++;
-        
-    }
+            minerMints[msg.sender]++;
+            }
 
-    function boostMinerHash(uint256 tokenId, uint256 _pid) public {
+    function boostMinerHash(uint256 tokenId, uint256 _pid, uint256 windmillToken) public {
         // Ensure the caller is the owner of the miner
         address owner = ownerOf(tokenId);
-        require(tokenId >= 2000 && tokenId < 2999, "invalid token Id");
+        require(tokenId >= 2000 && tokenId < 3000, "Invalid token Id");
         require(msg.sender == owner, "Not the owner of the token");
+
         TokenInfo storage tokens = AllowedCrypto[_pid];
-        IERC20 paytoken;
-        paytoken = tokens.paytoken;
-        // Deduct the boost cost from the sender's balance
-        uint256 price = sklBoostRate;
-            require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
-            paytoken.transferFrom(msg.sender, address(this), price);
+        IERC20 paytoken = tokens.paytoken;
 
-        // Get the windmill details
         // Check if the caller owns a windmill
-        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill();
+        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(owner);
+        uint256 windmillTokenId = userWindmill.tokenId; // Store the windmill tokenId
 
-        // Check if the user has a valid windmill based on the returned struct.
-        require(userWindmill.tokenId > 0, "Caller must own at least one windmill to mint a miner");
+        // Check if the user has at least one windmill
+        require(windmillTokenId > 0, "Caller must own at least one windmill to mint a miner");
 
-        // Now you can use 'userWindmill.tokenId' to retrieve information about the user's windmill.
-        IWindmill.Windmill memory windmill = IWindmill(wm).getWindmill(userWindmill.tokenId);
+        // Get the current power used and windmill cap
+        uint256 currentPower = IWindmill(wm).getCurrentPowerUsed(windmillToken);
+        uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
+
+        // Check if the user has enough capacity before boosting
+        require(currentPower + (minerPower * 107) <= cap, "You must increase your windmill capacity");
+
+        uint256 price = sklBoostRate;
+        require(paytoken.balanceOf(msg.sender) >= price, "Insufficient funds");
+        paytoken.transferFrom(msg.sender, address(this), price);
 
         // Get the miner details
         Miner storage miner = miners[tokenId];
-        
+
         // Update the token stats based on the boosted miner's parameters
-            require(windmill.currentPowerUsed + 5 < windmill.windmillCap, "Windmill capacity has been reached, please increase capacity");
-            miner.accumulated = (block.number - miner.lastUpdateBlock * sklReward) * miner.hashrate + miner.accumulated;
-            miner.hashrate = miner.hashrate + hsh;
-            miner.powerConsumption = miner.powerConsumption + (minerPower * 5);
-            miner.rewardPerBlock = miner.hashrate * sklReward;
-            miner.lastUpdateBlock = block.number;
-            miner.dailyEstimate = miner.rewardPerBlock * dailyBlocks;
-            skale.totalHashrate = skale.totalHashrate + 1;
-            skale.totalPowerConsumption = skale.totalPowerConsumption + (minerPower * 5);
-            windmill.currentPowerUsed = windmill.currentPowerUsed + (minerPower * 5);
+        miner.accumulated += (block.number - miner.lastUpdateBlock) * miner.hashrate;
+        miner.hashrate += hsh;
+        miner.powerConsumption += (minerPower * 5);
+        miner.rewardPerBlock = miner.hashrate * sklReward;
+        miner.lastUpdateBlock = block.number;
+        miner.dailyEstimate = miner.rewardPerBlock * dailyBlocks;
+
+            uint256 newPower = minerPower * 21;
+            uint256 totalPower = currentPower + newPower;
+            // Update the windmill's current power used and windmill cap
+            IWindmill(wm).updateWindmillCurrentPower(windmillToken, totalPower, true);
+
     }
+
 
     // Update the name of a miner
     function updateMinerName(uint256 _tokenId, string memory _newName, uint256 _pid) public {
@@ -349,31 +336,37 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
         require(_exists(tokenId), "Invalid tokenId");
         uint256 _pid = 0; // wbtc
         address user = msg.sender;
-        require(minerHolders[user] == tokenId, "Not the owner of the token");
+
         // Check if the caller owns a windmill
-        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill();
+            IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
 
-        // Check if the user has a valid windmill based on the returned struct.
-        require(userWindmill.tokenId > 0, "Caller must own at least one windmill to mint a miner");
+            // Check if the user has at least one windmill
+            require(userWindmill.tokenId > 0, "Caller must own at least one windmill to mint a miner");
 
-        // Now you can use 'userWindmill.tokenId' to retrieve information about the user's windmill.
-        IWindmill.Windmill memory windmill = IWindmill(wm).getWindmill(userWindmill.tokenId);
-        Miner storage miner = miners[tokenId];
-        require(miner.powerConsumption < windmill.windmillCap, "caller does not have required power to claim, please increase your windmill capacity" );
+            // Access the windmill data directly using userWindmill.tokenId
+            require(userWindmill.currentPowerUsed + (minerPower * 10) <= userWindmill.windmillCap, "You must increase your windmill capacity");
+        // Get the miner's tokenId from the function parameter
+        uint256 minerTokenId = tokenId;
+
+
         // Distribute rewards to the user
-        uint256 rewards = getPendingRewards(tokenId); // Implement reward calculation
+        uint256 rewards = getPendingRewards(minerTokenId); // Implement reward calculation
+
         // Call the appropriate claim function in the DistributionPool contract based on minerType
         IDistributionPool(dp).claim(user, _pid, rewards);
-        
-        miner.accumulated = 0;
-        miner.lastUpdateBlock = block.number;
+
+        // Reset miner's accumulated rewards and update the last update block
+        miners[minerTokenId].accumulated = 0;
+        miners[minerTokenId].lastUpdateBlock = block.number;
 
         // Adjust the total rewards paid according to miner
-            skale.totalRewardsPaid = skale.totalRewardsPaid + rewards;
+        skale.totalRewardsPaid += rewards;
 
         // Emit an event or perform other actions as needed
-        emit RewardClaimed(user, tokenId);
+        emit RewardClaimed(user, minerTokenId);
     }
+
+
 
     // Retrieve pending rewards for a miner
     function getPendingRewards(uint256 tokenId) public view returns (uint256) {
@@ -387,11 +380,15 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
             return rewards;
     }
 
+    function getMinerMints(address referrer) external view returns (uint){
+        return minerMints[referrer];
+    }
+
 
     // Safemint
 
     function safeMintSklMiner(address to) internal {
-        uint256 tokenId = _sklMinerTokenIds.current() + 1999;
+        uint256 tokenId = _sklMinerTokenIds.current() + 2000;
         _sklMinerTokenIds.increment();
         minerHolders[msg.sender] = tokenId;
         _safeMint(to, tokenId);
@@ -428,16 +425,6 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
     // Function to update the windmill contract address if needed
     function initializeWm(address _wm) public onlyOwner {
         wm = _wm;
-    }
-
-    // Function to update the claim token contract address if needed
-    function initializeCm(address _cm) public onlyOwner {
-        cm = _cm;
-    }
-
-    // Function to update and initialize referral contract
-    function initializeRf(address _rf) public onlyOwner {
-        rf = _rf;
     }
 
     // Pause minting or boosting if necessary
@@ -485,7 +472,7 @@ contract VoxelVerseSkaleMiner is ERC721, Ownable {
         }
     }
 
-    function setBtcBoostRate(uint256 _rate) public onlyOwner {
+    function setSklBoostRate(uint256 _rate) public onlyOwner {
         sklBoostRate = _rate;
     }
 

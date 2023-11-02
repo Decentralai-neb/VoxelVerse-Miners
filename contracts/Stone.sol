@@ -66,14 +66,14 @@ contract VoxelVerseStone is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
     }
 
-    function burnStone(uint256 amount) external {
+    function burnStone(address user, uint256 amount) external {
         // Burn the wood token
-        require(balanceOf(msg.sender, 2) > 0, "You don't any stone to burn!");
+        require(balanceOf(user, 2) > 0, "You don't any stone to burn!");
 
         // Destroy the wood token
-        _burn(msg.sender, 2, amount);
+        _burn(user, 2, amount);
 
         // Emit a Burned event
-        emit Burned(msg.sender, amount);
+        emit Burned(user, amount);
     }
 }

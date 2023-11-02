@@ -66,14 +66,14 @@ contract VoxelVerseWood is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155S
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
     }
 
-    function burnWood(uint256 amount) external {
+    function burnWood(address user, uint256 amount) external {
         // Burn the wood token
-        require(balanceOf(msg.sender, 1) > 0, "You don't any wood to burn!");
+        require(balanceOf(user, 1) > 0, "You don't any wood to burn!");
 
         // Destroy the wood token
-        _burn(msg.sender, 1, amount);
+        _burn(user, 1, amount);
 
         // Emit a Burned event
-        emit Burned(msg.sender, amount);
+        emit Burned(user, amount);
     }
 }

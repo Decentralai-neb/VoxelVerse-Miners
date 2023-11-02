@@ -34,7 +34,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
     uint256 public lowCap = 40 ether;
 
     // Free Claims
-    uint256 public claimPremCap = 4 ether; 
+    uint256 public claimPremCap = 10 ether; 
     uint256 public claimHighCap = 3 ether;
     uint256 public claimMedCap = 2 ether;
     uint256 public claimLowCap = 1 ether;
@@ -77,29 +77,47 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         requiredMaterials[5] = 32;
         requiredMaterials[6] = 80;
         requiredMaterials[7] = 106;
-        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
-
-        // Initialize windmills and their imageURIs
-        for (uint256 tokenId = 1; tokenId <= windmillSupply; tokenId++) {
-            string memory imageURI = string(abi.encodePacked(baseImageURI, Strings.toString(tokenId), ".png"));
-            
-            windmills[tokenId].imageURI = imageURI;
-        }
     }
 
-    function checkIfUserHasWindmill() external view returns (Windmill memory) {
-        // Get the tokenId of the user's character NFT
-        uint256 userNftTokenId = windmillHolders[msg.sender];
-        // If the user has a tokenId in the map, return their character.
-        if (userNftTokenId > 0) {
-            return windmills[userNftTokenId];
-        }
-        // Else, return an empty character.
-        else {
+    function checkIfUserHasWindmill(address user) external view returns (Windmill memory) {
+        // Retrieve the windmill based on the user's address
+        Windmill memory userWindmill = windmills[windmillHolders[user]];
+
+        if (userWindmill.tokenId > 0) {
+            return userWindmill;
+        } else {
             Windmill memory emptyStruct;
             return emptyStruct;
         }
     }
+
+    function tokensOfOwner(address owner) external view returns (uint256[] memory) {
+        uint256 balance = balanceOf(owner);
+        uint256[] memory tokens = new uint256[](balance);
+
+        for (uint256 i = 0; i < balance; i++) {
+            tokens[i] = tokenOfOwnerByIndex(owner, i);
+        }
+
+        return tokens;
+    }
+
+    function tokenOfOwnerByIndex(address owner, uint256 index) public view returns (uint256) {
+        require(index < balanceOf(owner), "Owner has no token at this index");
+
+        for (uint256 i = 0; i < _windmillTokenIds.current(); i++) {
+            uint256 tokenId = i + 10000;
+            if (ownerOf(tokenId) == owner) {
+                if (index == 0) {
+                    return tokenId;
+                }
+                index--;
+            }
+        }
+        revert("Token not found");
+    }
+
+
 
      function tokenURI(uint256 _tokenId) public view virtual override returns (string memory) {
         require(_exists(_tokenId), "ERC721Metadata: URI query for nonexistent token");
@@ -167,7 +185,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         IWood(wood).burnWood(user, _requiredMaterial1);
         IStone(stone).burnStone(user, _requiredMaterial2);
         // Create a new windmill with the specified _cap
-        uint256 generatorToken = _windmillTokenIds.current() + 9999;
+        uint256 generatorToken = _windmillTokenIds.current() + 10000;
 
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
@@ -180,6 +198,9 @@ contract VoxelVerseWindmill is ERC721, Ownable {
 
         // Increment the count of windmills minted by the sender's address
         windmillsMintedByAddress[msg.sender]++;
+
+        // Set the mapping for the user's token ID
+        windmillHolders[msg.sender] = generatorToken;
     }
 
     function claimWindmill(uint256 _cap, uint256 _pid, string memory _imageURI) public {
@@ -218,7 +239,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         IStone(stone).burnStone(user, _requiredMaterial2);
 
         // Create a new windmill with the specified _cap
-        uint256 generatorToken = _windmillTokenIds.current() + 9999;
+        uint256 generatorToken = _windmillTokenIds.current() + 10000;
 
         windmills[generatorToken] = Windmill({
             tokenId: generatorToken,
@@ -239,7 +260,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         paytoken = tokens.paytoken;
         // Ensure the caller is the owner of the miner
         address owner = ownerOf(tokenId);
-        require(tokenId >= 14000 && tokenId < 28000, "invalid token Id");
+        require(tokenId >= 10000 && tokenId < 20000, "invalid token Id");
         require(msg.sender == owner, "Not the owner of the token");
 
         // Deduct the boost cost from the sender's balance
@@ -251,16 +272,46 @@ contract VoxelVerseWindmill is ERC721, Ownable {
        windmill.windmillCap = windmill.windmillCap + amount;  
     }
 
-     // Function to retrieve a Windmill struct by tokenId
-    function getWindmill(uint256 tokenId) public view returns (Windmill memory) {
-        return windmills[tokenId];
+    function getCurrentPowerUsed(uint256 tokenId) external view returns (uint256) {
+        require(_exists(tokenId), "Windmill with given tokenId does not exist");
+        Windmill storage windmill = windmills[tokenId];
+        return windmill.currentPowerUsed;
     }
+
+    function getWindmillCap(uint256 tokenId) external view returns (uint256) {
+        require(_exists(tokenId), "Windmill with given tokenId does not exist");
+        Windmill storage windmill = windmills[tokenId];
+        return windmill.windmillCap;
+    }
+
+
+   function updateWindmillCurrentPower(uint256 tokenId, uint256 newPower, bool bypassOwnership) external {
+        require(_exists(tokenId), "Windmill with the given tokenId does not exist");
+        
+        // Check ownership only if bypassOwnership is false
+        if (!bypassOwnership) {
+            require(ownerOf(tokenId) == msg.sender, "Only the owner can update windmill power");
+        }
+        
+        Windmill storage windmill = windmills[tokenId];
+        windmill.currentPowerUsed = newPower;
+    }
+
+
+    function updateWindmillCap(uint256 tokenId, uint256 newCap) external {
+        require(_exists(tokenId), "Windmill with given tokenId does not exist");
+        require(ownerOf(tokenId) == msg.sender, "Only the owner can update windmill cap");
+        
+        Windmill storage windmill = windmills[tokenId];
+        windmill.windmillCap = newCap;
+    }
+
 
 
     // Safemint
 
     function safeMintWindmill(address to) internal {
-        uint256 tokenId = _windmillTokenIds.current() + 9999;
+        uint256 tokenId = _windmillTokenIds.current() + 10000;
         _windmillTokenIds.increment();
         windmillHolders[msg.sender] = tokenId;
         _safeMint(to, tokenId);
@@ -337,6 +388,16 @@ contract VoxelVerseWindmill is ERC721, Ownable {
 
     function setClaimPremCap(uint256 _price) public onlyOwner {
         claimPremCap = _price;
+    }
+
+    // Function to initialize and update the wood token contract address if needed
+    function initializeWd(address _wood) public onlyOwner {
+        wood = _wood;
+    }
+
+    // Function to initialize and update the stone token contract address if needed
+    function initializeSt(address _stone) public onlyOwner {
+        stone = _stone;
     }
 
     // Withdraw ERC20 tokens

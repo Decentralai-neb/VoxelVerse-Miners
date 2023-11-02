@@ -2,14 +2,16 @@
 pragma solidity ^0.8.0;
 
 interface IWindmill {
-    // Windmill Data
     struct Windmill {
-        uint256 tokenId; // Token Id of windmill
-        uint256 currentPowerUsed; // The current amount of power used
-        uint256 windmillCap; // The current generating capacity of a windmill
+        uint256 tokenId;
+        uint256 currentPowerUsed;
+        uint256 windmillCap;
+        string imageURI;
     }
 
-    function checkIfUserHasWindmill() external view returns (Windmill memory);
-
-    function getWindmill(uint256 tokenId) external view returns (Windmill memory);
+    function checkIfUserHasWindmill(address user) external view returns (Windmill memory);
+    function getCurrentPowerUsed(uint256 tokenId) external view returns (uint256);
+    function getWindmillCap(uint256 tokenId) external view returns (uint256);
+    function updateWindmillCurrentPower(uint256 tokenId, uint256 newPower, bool bypassOwnership) external;
+    function updateWindmillCap(uint256 tokenId, uint256 newCap) external;
 }

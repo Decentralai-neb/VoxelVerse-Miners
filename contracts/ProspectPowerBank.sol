@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 
 
-contract DistributionPool is Ownable {
+contract ProspectPowerBank is Ownable {
 
     bool public lock;
 
