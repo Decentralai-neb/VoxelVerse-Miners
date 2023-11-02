@@ -55,6 +55,7 @@ describe('VoxelVerseMiners', function () {
     const minerDiscountPrice = ethers.utils.parseUnits("190", "ether");  // 190 ether in wei
     const burnAmount = ethers.utils.parseUnits("2", "ether");    // 2 ether in wei
     const approvalAmount = ethers.utils.parseUnits("50000", "ether"); // 50000 ether in wei
+    const tokenName = "Prospect";
     const capRate = ethers.utils.parseUnits("0.7", "ether"); // 0.7 ether in wei
     const lowCap = ethers.utils.parseUnits("50", "ether"); // 50 ether in wei
     const medCap = ethers.utils.parseUnits("100", "ether"); // 100 ether in wei
@@ -93,7 +94,7 @@ describe('VoxelVerseMiners', function () {
     await voxelverseskaleminer.setBurnAmount(burnAmount);
     await distributionpool.allowContract(voxelversebitcoinminer.address);
     await distributionpool.allowContract(voxelverseskaleminer.address);
-    await distributionpool.addCurrency(prospect.address);
+    await distributionpool.addCurrency(prospect.address, tokenName);
     await distributionpool.setRate(0,1);
     await prospectpowerbank.allowContract(pickaxes.address);
     await prospectpowerbank.addCurrency(prospect.address);

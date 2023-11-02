@@ -14,6 +14,7 @@ contract DistributionPool is Ownable {
 
     struct TokenInfo {
         IERC20 paytoken;
+        string name;
     }
 
     TokenInfo[] public AllowedCrypto;
@@ -44,16 +45,26 @@ contract DistributionPool is Ownable {
 
     // Add an erc20 token to be accepted for payment
     function addCurrency(
-        IERC20 _paytoken
+        IERC20 _paytoken,
+        string memory _name
         ) public onlyOwner {
         AllowedCrypto.push(
-        TokenInfo({paytoken: _paytoken})
+        TokenInfo({paytoken: _paytoken, name: _name})
         );
     }
 
     // Set the rate of the erc20 token accepted for payment, first erc20 token set is always pid 0
     function setRate(uint256 _pid, uint _rate) public onlyOwner {
         rates[_pid] = _rate;
+    }
+
+    // Update the token address and name for a specific pid
+    function updateCurrency(uint256 _pid, IERC20 _newPaytoken, string memory _newName) public onlyOwner {
+        require(_pid < AllowedCrypto.length, "Invalid pid");
+        
+        TokenInfo storage tokenInfo = AllowedCrypto[_pid];
+        tokenInfo.paytoken = _newPaytoken;
+        tokenInfo.name = _newName;
     }
 
     function deposit(uint256 amount, uint256 _pid) public onlyOwner {
