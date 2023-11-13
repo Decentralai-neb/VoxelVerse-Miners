@@ -51,7 +51,7 @@ contract Referrers is Ownable {
                 // Retrieve the referrer's pickaxeMints using pickaxeMints mapping
                 uint256 referrerMints = IPickaxes(px).getPickaxeMints(referrer);
 
-                require(referrerMints > 0, "Referrer has not minted a miner");
+                require(referrerMints > 0, "Referrer has not crafted a Pickaxe");
             }
 
             IBitcoinMiner(bm).mintWithReferrer(user, _pid, windmillToken);
@@ -73,7 +73,7 @@ contract Referrers is Ownable {
                 // Retrieve the referrer's pickaxeMints using pickaxeMints mapping
                 uint256 referrerMints = IPickaxes(wm).getPickaxeMints(referrer);
 
-                require(referrerMints > 0, "Referrer has not minted a miner");
+                require(referrerMints > 0, "Referrer has not crafted a Pickaxe");
             }
 
             ISkaleMiner(sm).mintWithReferrer(user, _pid, windmillToken);
