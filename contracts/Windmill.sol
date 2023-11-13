@@ -22,22 +22,22 @@ contract VoxelVerseWindmill is ERC721, Ownable {
     Counters.Counter private _windmillTokenIds;
 
     // Windmill supply control
-    uint256 public windmillSupply = 14000;
+    uint256 public windmillSupply = 10000;
 
     // Mapping to track windmills minted by address
     mapping(address => uint256) public windmillsMintedByAddress;
 
     // Pricing
     uint256 public premCap = 450 ether; 
-    uint256 public highCap = 90 ether;
-    uint256 public medCap = 60 ether;
-    uint256 public lowCap = 40 ether;
+    uint256 public highCap = 150 ether;
+    uint256 public medCap = 120 ether;
+    uint256 public lowCap = 60 ether;
 
     // Free Claims
-    uint256 public claimPremCap = 10 ether; 
-    uint256 public claimHighCap = 3 ether;
-    uint256 public claimMedCap = 2 ether;
-    uint256 public claimLowCap = 1 ether;
+    uint256 public claimPremCap = 45 ether; 
+    uint256 public claimHighCap = 25 ether;
+    uint256 public claimMedCap = 15 ether;
+    uint256 public claimLowCap = 8 ether;
 
     // Increase cap pricing
     uint256 public windCapIncreaseRate;   
@@ -175,6 +175,59 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         windmillHolders[msg.sender] = generatorToken;
     }
 
+    function mintWindmillWithReferrer(address user, uint256 _cap, uint256 _pid) external {
+        require(windmillsMintedByAddress[user] == 0, "Caller already owns a Windmill");
+        require(_cap == 500 || _cap == 150 || _cap == 100 || _cap == 50, "Invalid _cap value");
+        TokenInfo storage tokens = AllowedCrypto[_pid];
+        IERC20 paytoken;
+        paytoken = tokens.paytoken;
+
+        uint256 requiredPrice;
+        uint256 _requiredMaterial1;
+        uint256 _requiredMaterial2;
+
+        if (_cap == 500) {
+            requiredPrice = premCap;
+            _requiredMaterial1 = requiredMaterials[6];
+            _requiredMaterial2 = requiredMaterials[7];
+        } else if (_cap == 150) {
+            requiredPrice = highCap;
+            _requiredMaterial1 = requiredMaterials[4];
+            _requiredMaterial2 = requiredMaterials[5];
+        } else if (_cap == 100) {
+            requiredPrice = medCap;
+            _requiredMaterial1 = requiredMaterials[3];
+            _requiredMaterial2 = requiredMaterials[4];
+        } else if (_cap == 50) {
+            requiredPrice = lowCap;
+            _requiredMaterial1 = requiredMaterials[1];
+            _requiredMaterial2 = requiredMaterials[2];
+        }
+
+        require(_windmillTokenIds.current() <= windmillSupply, "Windmill supply exceeded");
+        require(paytoken.balanceOf(user) >= requiredPrice, "Insufficient funds");
+        paytoken.transferFrom(user, address(this), requiredPrice);
+        IWood(wood).burnWood(user, _requiredMaterial1);
+        IStone(stone).burnStone(user, _requiredMaterial2);
+        // Create a new windmill with the specified _cap
+        uint256 generatorToken = _windmillTokenIds.current() + 10000;
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
+        windmills[generatorToken] = Windmill({
+            tokenId: generatorToken,
+            currentPowerUsed: 0,
+            windmillCap: _cap,
+            imageURI:string(abi.encodePacked(baseImageURI, Strings.toString(generatorToken), ".png"))
+        });
+        // Mint the Windmill token with the correct token ID
+        safeMintWindmill(user);
+
+        // Increment the count of windmills minted by the sender's address
+        windmillsMintedByAddress[user]++;
+
+        // Set the mapping for the user's token ID
+        windmillHolders[user] = generatorToken;
+    }
+
     function claimWindmill(uint256 _cap, uint256 _pid) public {
         require(windmillsMintedByAddress[msg.sender] == 0, "Caller already owns a Windmill");
         TokenInfo storage tokens = AllowedCrypto[_pid];
@@ -233,7 +286,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
         paytoken = tokens.paytoken;
         // Ensure the caller is the owner of the miner
         address owner = ownerOf(tokenId);
-        require(tokenId >= 10000 && tokenId < 20000, "invalid token Id");
+        require(tokenId >= 10000 && tokenId < 20001, "invalid token Id");
         require(msg.sender == owner, "Not the owner of the token");
 
         // Deduct the boost cost from the sender's balance
@@ -293,7 +346,7 @@ contract VoxelVerseWindmill is ERC721, Ownable {
     // onlyOwner functions
 
     function airdropWindmillCap(uint256 tokenId, uint256 amount) public onlyOwner{
-        require(tokenId >= 10000 && tokenId < 20000, "invalid token Id");
+        require(tokenId >= 10000 && tokenId < 20001, "invalid token Id");
         // Get the windmill details
         Windmill storage windmill = windmills[tokenId];
         // Update the windmills capacity

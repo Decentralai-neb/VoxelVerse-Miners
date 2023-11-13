@@ -9,6 +9,9 @@ import "./interfaces/IClaim.sol";
 import "./interfaces/IBitcoinMiner.sol";
 import "./interfaces/ISkaleMiner.sol";
 
+import "./interfaces/IWindmill.sol";
+import "./interfaces/IPickaxes.sol";
+
 
 
 
@@ -23,6 +26,8 @@ contract Referrers is Ownable {
     address public cm; // claim token contract
     address public bm; // bitcoin miner contract
     address public sm; // skale miner contract
+    address public wm; // windmill contract
+    address public px; // pickaxe contract
 
     constructor() {
     }
@@ -35,7 +40,7 @@ contract Referrers is Ownable {
         return claimTokensReceived[referrer];
     }
 
-     function mintBmWithReferral(uint256 _pid, address referrer, uint256 windmillToken) public {
+     function mintBmWithReferrer(uint256 _pid, address referrer, uint256 windmillToken) public {
 
             address user = msg.sender;
 
@@ -43,13 +48,13 @@ contract Referrers is Ownable {
             if (referrer != address(0)) {
                 require(referrer != user, "Cannot refer yourself");
 
-                // Retrieve the referrer's minerMints using minerMints mapping
-                uint256 referrerMints = IBitcoinMiner(bm).getMinerMints(referrer);
+                // Retrieve the referrer's pickaxeMints using pickaxeMints mapping
+                uint256 referrerMints = IPickaxes(px).getPickaxeMints(referrer);
 
                 require(referrerMints > 0, "Referrer has not minted a miner");
             }
 
-            IBitcoinMiner(bm).mintWithReferral(user, _pid, windmillToken);
+            IBitcoinMiner(bm).mintWithReferrer(user, _pid, windmillToken);
             
             IClaim(cm).mint(referrer); // reward the referrer with 1 claim token for the successful referral
             claimTokensReceived[referrer]++;
@@ -57,7 +62,7 @@ contract Referrers is Ownable {
             referrals[referrer] = user;
         }
 
-    function mintSmWithReferral(uint256 _pid, address referrer, uint256 windmillToken) public {
+    function mintSmWithReferrer(uint256 _pid, address referrer, uint256 windmillToken) public {
 
             address user = msg.sender;
 
@@ -65,13 +70,35 @@ contract Referrers is Ownable {
             if (referrer != address(0)) {
                 require(referrer != user, "Cannot refer yourself");
 
-                // Retrieve the referrer's minerMints using minerMints mapping
-                uint256 referrerMints = ISkaleMiner(sm).getMinerMints(referrer);
+                // Retrieve the referrer's pickaxeMints using pickaxeMints mapping
+                uint256 referrerMints = IPickaxes(wm).getPickaxeMints(referrer);
 
                 require(referrerMints > 0, "Referrer has not minted a miner");
             }
 
-            ISkaleMiner(sm).mintWithReferral(user, _pid, windmillToken);
+            ISkaleMiner(sm).mintWithReferrer(user, _pid, windmillToken);
+            
+            IClaim(cm).mint(referrer); // reward the referrer with 1 claim token for the successful referral
+            claimTokensReceived[referrer]++;
+            totalReferrals [referrer]++;
+            referrals[referrer] = user;
+        }
+
+    function mintWmWithReferral(uint256 _pid, uint256 _cap, address referrer) public {
+
+            address user = msg.sender;
+
+            // Check if referrer address is valid
+            if (referrer != address(0)) {
+                require(referrer != user, "Cannot refer yourself");
+
+                // Retrieve the referrer's pickaxeMints using pickaxeMints mapping
+                uint256 referrerMints = IPickaxes(wm).getPickaxeMints(referrer);
+
+                require(referrerMints > 0, "Referrer has not crafted a Pickaxe");
+            }
+
+            IWindmill(wm).mintWindmillWithReferrer(user, _cap, _pid);
             
             IClaim(cm).mint(referrer); // reward the referrer with 1 claim token for the successful referral
             claimTokensReceived[referrer]++;
@@ -92,5 +119,15 @@ contract Referrers is Ownable {
     // Function to initialize and update the bitcoin miner contract address if needed
     function initializeSm(address _sm) public onlyOwner {
         sm = _sm;
+    }
+
+    // Function to initialize and update the windmill contract address if needed
+    function initializeWm(address _wm) public onlyOwner {
+        wm = _wm;
+    }
+
+    // Function to initialize and update the pickaxe contract address if needed
+    function initializePx(address _px) public onlyOwner {
+        px = _px;
     }
 }

@@ -102,6 +102,8 @@ describe('VoxelVerseMiners', function () {
     await referrers.initializeCm(claimtoken.address);
     await referrers.initializeBm(voxelversebitcoinminer.address);
     await referrers.initializeSm(voxelverseskaleminer.address);
+    await referrers.initializeWm(voxelversewindmill.address);
+    await referrers.initializePx(pickaxes.address);
     await prospect.approve(distributionpool.address, approvalAmount);
     await prospect.approve(voxelversebitcoinminer.address, approvalAmount);
     await prospect.approve(voxelverseskaleminer.address, approvalAmount);
@@ -359,7 +361,7 @@ describe('VoxelVerseMiners', function () {
     console.log(userBalanceBefore);
     console.log(userWindmillDataBefore);
     console.log(ownerClaimBalanceBefore);
-    await referrers.connect(addr1).mintBmWithReferral(_pid, referrerAddress, _token);
+    await referrers.connect(addr1).mintBmWithReferrer(_pid, referrerAddress, _token);
     const userBalanceAfter = await voxelversebitcoinminer.balanceOf(addr1.address);
     const userWindmillDataAfter = await voxelversewindmill.windmills(_token);
     const ownerClaimBalanceAfter = await claimtoken.balanceOf(owner.address);

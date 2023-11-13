@@ -40,6 +40,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     // Pricing 
     uint256 public btcMinerPrice;
     uint256 public discountedPrice;
+    uint256 public claimPrice;
     uint256 public burnAmount;
 
     // Hashrate pricing
@@ -52,6 +53,15 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
     uint256 public constant hsh = 1; // bitcoin hash equivalent to 1TH used when hashrate is increased
     uint256 public constant minerPower = 1; // Used for miner power calculations
 
+    // handle CLAIM payments
+    struct ClaimTokenInfo {
+        IERC20 claimtoken;
+    }
+
+    ClaimTokenInfo[] public AllowedClaimCrypto;
+    mapping(uint256 => uint) public claimRate;
+
+    // handle PROSPECT and USDC payments
     struct TokenInfo {
         IERC20 paytoken;
         string name;
@@ -146,7 +156,7 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         _;
     }
 
-    function mintWithReferral(address user, uint256 _pid, uint256 windmillToken) external {
+    function mintWithReferrer(address user, uint256 _pid, uint256 windmillToken) external {
 
        // Check if the caller owns a windmill
         IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
@@ -233,6 +243,69 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
         require(bitcoin.minersHashing + amount <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
         require(paytoken.balanceOf(user) >= price, "Insufficient funds");
         paytoken.transferFrom(user, address(this), price * amount);
+
+        // Set the new token struct data
+        uint256 minerToken = _btcMinerTokenIds.current() + 1;
+
+        string memory baseImageURI = "https://pickaxecrypto.mypinata.cloud/ipfs/Qma9qoWfYLK1gwrejpk7st4wt7V82YxoDy9MwLESH4HkY4/";
+        miners[minerToken] = Miner({
+            tokenId: minerToken,
+            token: "Bitcoin", // Replace this with the appropriate token name
+            name: "JohnnyNewcome", // Miner name
+            hashrate: initialHashrate, // Replace this with the appropriate hashrate
+            hashMeasured: "TH", // Measured in TerraHashes
+            powerConsumption: minerPower * 107, // Replace this with the appropriate power consumption
+            rewardPerBlock: initialHashrate * btcReward, // Calculate the rewardPerBlock based on hashrate and btcReward
+            lastUpdateBlock: block.number, // Initialize the lastUpdateBlock with the current block
+            accumulated: 0,
+            dailyEstimate: initialHashrate * btcReward * dailyBlocks,
+            imageURI: string(abi.encodePacked(baseImageURI, Strings.toString(minerToken), ".png"))
+        });
+
+        safeMintBtcMiner(user);
+
+        // Update global Bitcoin miner stats
+        bitcoin.minersHashing = bitcoin.minersHashing + amount;
+        bitcoin.minerTokenIds.push(minerToken);
+        bitcoin.totalHashrate = bitcoin.totalHashrate + (initialHashrate * amount);
+        bitcoin.totalPowerConsumption = bitcoin.totalPowerConsumption + (minerPower * 107);
+        bitcoinMinerSupply++;
+
+            uint256 newPower = minerPower * 107;
+            uint256 totalPower = currentPower + newPower;
+            // Update the windmill's current power used and windmill cap
+            IWindmill(wm).updateWindmillCurrentPower(windmillToken, totalPower, true);
+            minerMints[msg.sender]++;
+        }
+
+    function claimMiner(uint256 _pid, uint256 windmillToken) public {
+        address user = msg.sender;
+
+        // Check if the caller owns a windmill
+        IWindmill.Windmill memory userWindmill = IWindmill(wm).checkIfUserHasWindmill(user);
+        uint256 windmillTokenId = userWindmill.tokenId; // Store the windmill tokenId
+
+        // Check if the user has at least one windmill
+        require(windmillTokenId > 0, "Caller must own at least one windmill to mint a miner");
+
+        // Get the current power used and windmill cap
+        uint256 currentPower = IWindmill(wm).getCurrentPowerUsed(windmillToken);
+        uint256 cap = IWindmill(wm).getWindmillCap(windmillToken);
+
+        // Check if the user has enough capacity before minting
+        require(currentPower + (minerPower * 107) <= cap, "You must increase your windmill capacity");
+
+        // ERC20 paytoken logic
+        ClaimTokenInfo storage tokens = AllowedClaimCrypto[_pid];
+        IERC20 claimtoken;
+        claimtoken = tokens.claimtoken;
+        uint256 amount = 1;
+        uint256 price = claimPrice;
+
+        require(!btcPaused, "Bitcoin miner minting is paused");
+        require(bitcoin.minersHashing + amount <= bitcoinMinerSupply, "Bitcoin miner supply exceeded");
+        require(claimtoken.balanceOf(user) >= price, "Insufficient funds");
+        claimtoken.transferFrom(user, address(this), price * amount);
 
         // Set the new token struct data
         uint256 minerToken = _btcMinerTokenIds.current() + 1;
@@ -399,11 +472,29 @@ contract VoxelVerseBitcoinMiner is ERC721, Ownable {
 
     // onlyOwner functions
 
-    // Initialize chest contract
+    // Initialize distribution pool contract
     function initializeDp(
         address _dp
         ) external onlyOwner {
         dp = _dp;
+    }
+
+    function addClaimToken(
+        IERC20 _claimtoken
+    ) public onlyOwner {
+        AllowedClaimCrypto.push(
+            ClaimTokenInfo({
+                claimtoken: _claimtoken
+            })
+        );
+    }
+
+    // Update the claim token address
+    function updateClaimToken(uint256 _pid, IERC20 _newClaimtoken) public onlyOwner {
+        require(_pid < AllowedClaimCrypto.length, "Invalid pid");
+        
+        ClaimTokenInfo storage claimTokenInfo = AllowedClaimCrypto[_pid];
+        claimTokenInfo.claimtoken = _newClaimtoken;
     }
 
     function addCurrency(

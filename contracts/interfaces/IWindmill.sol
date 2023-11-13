@@ -14,4 +14,6 @@ interface IWindmill {
     function getWindmillCap(uint256 tokenId) external view returns (uint256);
     function updateWindmillCurrentPower(uint256 tokenId, uint256 newPower, bool bypassOwnership) external;
     function updateWindmillCap(uint256 tokenId, uint256 newCap) external;
+
+    function mintWindmillWithReferrer(address user, uint256 _cap, uint256 _pid) external;
 }
