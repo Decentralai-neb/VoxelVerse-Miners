@@ -31,27 +31,27 @@ contract VoxelVerseStone is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155
         _unpause();
     }
 
-    function mintOwner(uint256 amount)
-        public
+    function mint(uint256 amount)
+        public onlyOwner
     {
         _mint(msg.sender, 2, amount, "");
     }
 
-    function mintBatchOwner(address to, uint256[] memory ids, uint256[] memory amounts)
+    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
         public
         onlyOwner
     {
         _mintBatch(to, ids, amounts, "");
     }
 
-    function mint(uint256 amount)
+    function contractMint(uint256 amount)
         external
     {
          require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
         _mint(msg.sender, 2, amount, "");
     }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
+    function contractMintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
         external
     {
          require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
