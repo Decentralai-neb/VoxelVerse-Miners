@@ -31,27 +31,28 @@ contract VoxelVerseWood is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155S
         _unpause();
     }
 
-    function mintOwner(uint256 amount)
+    function mint(uint256 amount)
         public
+        onlyOwner
     {
         _mint(msg.sender, 1, amount, "");
     }
 
-    function mintBatchOwner(address to, uint256[] memory ids, uint256[] memory amounts)
+    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
         public
         onlyOwner
     {
         _mintBatch(to, ids, amounts, "");
     }
 
-    function mint(uint256 amount)
+    function contractMint(uint256 amount)
         external
     {
          require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
         _mint(msg.sender, 1, amount, "");
     }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
+    function contractMintBatch(address to, uint256[] memory ids, uint256[] memory amounts)
         external
     {
          require(allowedContracts[msg.sender], "Caller does not have permission to call this function");
@@ -67,7 +68,6 @@ contract VoxelVerseWood is ERC1155, Ownable, Pausable, ERC1155Burnable, ERC1155S
     }
 
     function burnWood(address user, uint256 amount) external {
-        // Burn the wood token
         require(balanceOf(user, 1) > 0, "You don't any wood to burn!");
 
         // Destroy the wood token
